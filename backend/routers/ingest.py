@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from db import get_db, Source, Document, safe_json
+from db import get_db, Source, Document, SourceVersion, safe_json
 from crawler.ssrf_guard import validate_url
 from crawler.robots_cache import RobotsCache
 from crawler.sitemap_parser import collect_urls
@@ -165,6 +165,13 @@ def ingest_url(body: IngestUrlRequest, db: Session = Depends(get_db)):
     )
     db.add(source)
     db.flush()   # get source.id before inserting documents
+
+    # Phase 3: create version 1 for this web source
+    from db import SourceVersion
+    db.add(SourceVersion(
+        source_id=source.id, version_no=1,
+        parent_version=None, note="initial version",
+    ))
 
     # Insert documents
     for doc_data in stored_docs:

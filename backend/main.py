@@ -1,17 +1,32 @@
 """
-main.py — FastAPI entry point for Sift (Phase 1 + Phase 2).
+main.py — FastAPI entry point for Sift (Phase 1 + Phase 2 + Phase 3).
 
 Phase 1 endpoints (unchanged):
   POST /upload              — Upload a file, profile it, save to DB
   GET  /reports/{file_id}  — Retrieve one saved report
   GET  /reports             — List all uploads with a short summary
 
-Phase 2 endpoints (new):
+Phase 2 endpoints (unchanged):
   POST /ingest/url                    — Web ingestion via sitemap/URL
   GET  /sources                       — List all sources with counts
   GET  /sources/{id}/documents        — List documents for a source
   GET  /sources/{id}/quality          — Aggregate quality report
   GET  /documents/{id}               — Full document with content
+
+Phase 3 endpoints (new):
+  POST /sources/{id}/roles/infer              — Infer column roles
+  GET  /sources/{id}/roles                    — Get column roles
+  PUT  /sources/{id}/roles                    — Update column roles (confirmed)
+  POST /sources/{id}/proposals/generate       — Generate cleaning proposals
+  GET  /sources/{id}/proposals                — List proposals
+  POST /proposals/{id}/approve                — Approve a proposal
+  POST /proposals/{id}/reject                 — Reject a proposal
+  POST /sources/{id}/proposals/approve-all    — Bulk approve
+  POST /sources/{id}/apply                    — Apply approved proposals
+  GET  /sources/{id}/versions                 — List versions
+  GET  /sources/{id}/versions/{n}/profile     — Version profile
+  GET  /sources/{id}/diff                     — Diff two versions
+  GET  /sources/{id}/rows                     — Paginated rows
 """
 
 import os
@@ -29,6 +44,7 @@ from db import (
     init_db, get_db,
     FileRecord, QualityReport,
     Source, Document, Record,
+    SourceVersion,
     safe_json,
 )
 
@@ -45,6 +61,9 @@ from profiler.text_quality import compute_content_hash, run_all_checks
 from routers.ingest    import router as ingest_router
 from routers.sources   import router as sources_router
 from routers.documents import router as documents_router
+
+# Phase 3 router
+from routers.cleaning  import router as cleaning_router
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
@@ -66,15 +85,16 @@ UPLOAD_DIR = Path("uploads")
 
 # ── App init ──────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Sift — Phase 1 + Phase 2",
-    description="Data ingestion + quality profiling + content store + web crawler",
-    version="2.0.0",
+    title="Sift — Phase 1 + Phase 2 + Phase 3",
+    description="Data ingestion + quality profiling + content store + web crawler + cleaning workflow",
+    version="3.0.0",
 )
 
-# Register Phase 2 routers
+# Register routers
 app.include_router(ingest_router)
 app.include_router(sources_router)
 app.include_router(documents_router)
+app.include_router(cleaning_router)   # Phase 3
 
 
 @app.get("/", include_in_schema=False)
@@ -89,7 +109,41 @@ def startup():
     """Create uploads folder and initialise DB tables on first run."""
     UPLOAD_DIR.mkdir(exist_ok=True)
     init_db()
+    # Phase 3: ensure version 1 exists for any source without one
+    _backfill_source_versions()
     print("[OK] Sift ready. DB tables ready. Uploads dir ready.")
+
+
+def _backfill_source_versions():
+    """
+    Ensure every source has a source_versions row for version 1.
+    This is also handled by the SQL migration, but we run it in Python
+    too so that tests using SQLite don't need the SQL backfill.
+    """
+    from db import Source, SourceVersion, SessionLocal
+    db = SessionLocal()
+    try:
+        sources = db.query(Source).all()
+        for s in sources:
+            exists = (
+                db.query(SourceVersion)
+                .filter(
+                    SourceVersion.source_id == s.id,
+                    SourceVersion.version_no == 1,
+                )
+                .first()
+            )
+            if not exists:
+                sv = SourceVersion(
+                    source_id      = s.id,
+                    version_no     = 1,
+                    parent_version = None,
+                    note           = "initial version (backfill)",
+                )
+                db.add(sv)
+        db.commit()
+    finally:
+        db.close()
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -121,6 +175,12 @@ def _persist_structured(db: Session, file_id: int, filename: str, df) -> int:
     db.add(source)
     db.flush()
 
+    # Phase 3: create version 1 for this source
+    db.add(SourceVersion(
+        source_id=source.id, version_no=1,
+        parent_version=None, note="initial version",
+    ))
+
     for idx, row in df.iterrows():
         # Convert row to dict; replace NaN/NA with None for clean JSON
         row_dict = {}
@@ -138,6 +198,8 @@ def _persist_structured(db: Session, file_id: int, filename: str, df) -> int:
             source_id=source.id,
             row_index=int(idx),
             data=safe_json(row_dict),
+            version_no=1,
+            status="active",
         )
         db.add(record)
 
