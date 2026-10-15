@@ -1,0 +1,189 @@
+[
+  {
+    "test_id": "SEC-P2-01a",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback IPv4 127.0.0.1",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-01b",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback Octal 017700000001",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-01c",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback Hex 0x7f000001",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-01d",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback Dword 2130706433",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-01e",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback Short 127.1",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-01f",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback IPv6 [::1]",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-01g",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Loopback IPv4-mapped IPv6 [::ffff:127.0.0.1]",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-02a",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block AWS/GCP/Azure Cloud Metadata 169.254.169.254",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-03a",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Private IP 10.0.0.1",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-03b",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Private IP 172.16.0.1",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-03c",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block Private IP 192.168.1.1",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-05a",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block file:// scheme injection",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-05b",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block gopher:// scheme injection",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-05c",
+    "phase": "Phase 2",
+    "category": "SSRF Protection",
+    "description": "Block ftp:// scheme injection",
+    "expected": "422 blocked",
+    "actual": "Blocked with 422",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P2-07",
+    "phase": "Phase 2",
+    "category": "XXE / XML Entity Handling",
+    "description": "XML Entity parsing in sitemap crawler",
+    "expected": "Parser safely rejects entity declaration",
+    "actual": "Parser rejected with EntitiesForbidden: EntitiesForbidden(name='xxe', system_id=None, public_id=None)",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  },
+  {
+    "test_id": "QA-P2-01",
+    "phase": "Phase 2",
+    "category": "Quality Heuristics",
+    "description": "Prompt injection heuristic correctly detects 'ignore previous instructions'",
+    "expected": "Clean doc -> not flagged; malicious prompt -> flagged",
+    "actual": "Correctly flagged injection attempt",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  },
+  {
+    "test_id": "QA-P2-02",
+    "phase": "Phase 2",
+    "category": "Canonical Store",
+    "description": "GET /sources returns list of persisted sources",
+    "expected": "200 OK with list",
+    "actual": "200 OK with 108 sources",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  }
+]

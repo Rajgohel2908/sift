@@ -1,0 +1,1347 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sift \u2014 Phase 1-4 Baseline RAG",
+    "description": "Data ingestion + quality profiling + content store + web crawler + cleaning workflow + baseline RAG",
+    "version": "4.0.0"
+  },
+  "paths": {
+    "/ingest/url": {
+      "post": {
+        "summary": "Ingest a website via sitemap or single URL",
+        "description": "Crawl a website and store extracted text as documents.\n\n- Validates URL and performs SSRF protection.\n- Respects robots.txt (user-agent: SiftBot).\n- Discovers pages via sitemap.xml (with one level of sitemap index support).\n- Applies 1.5s inter-host delay, 10s timeout, 5MB response limit, max 3 redirects.\n- Extracts main content using trafilatura (no JavaScript execution).\n- Runs heuristic text quality checks on each document.\n- Returns a summary of stored and skipped pages.",
+        "operationId": "ingest_url_ingest_url_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources": {
+      "get": {
+        "summary": "List all sources with document and record counts",
+        "description": "Return all sources, each with a count of associated documents and records.",
+        "operationId": "list_sources_sources_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/documents": {
+      "get": {
+        "summary": "List documents for a source (no content body)",
+        "description": "Return document metadata for a source.\nThe full content field is omitted \u2014 use GET /documents/{id} for that.",
+        "operationId": "list_documents_sources__source_id__documents_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/quality": {
+      "get": {
+        "summary": "Aggregate quality report for a source",
+        "description": "Compute and return an aggregate quality report for all documents in a source.\n\nIncludes:\n  - document_count, total_words\n  - duplicate_groups (exact), near_duplicate_pairs\n  - freshness_distribution\n  - short_documents list\n  - injection_suspects list\n  - issues: human-readable list with severity (critical / warning / info)\n\nAll quality signals are heuristics \u2014 labeled as such in the output.",
+        "operationId": "source_quality_sources__source_id__quality_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{doc_id}": {
+      "get": {
+        "summary": "Get a full document including content",
+        "description": "Return a single document by ID, including its full text content.\nFor a list without content, use GET /sources/{source_id}/documents.",
+        "operationId": "get_document_documents__doc_id__get",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/roles/infer": {
+      "post": {
+        "summary": "Infer column roles for a structured source",
+        "description": "Run rule-based role inference on the latest version of a source's records.\nDoes NOT overwrite roles that are already confirmed by the user.\nReturns the full role list after inference.",
+        "operationId": "infer_column_roles_sources__source_id__roles_infer_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/roles": {
+      "get": {
+        "summary": "Get column roles for a source",
+        "description": "Return all column roles for the source.",
+        "operationId": "get_column_roles_sources__source_id__roles_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Manually set confirmed column roles",
+        "description": "Set one or more column roles, marking them confirmed=TRUE.\nThese will not be overwritten by future infer calls.",
+        "operationId": "update_column_roles_sources__source_id__roles_put",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleUpdateBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/proposals/generate": {
+      "post": {
+        "summary": "Generate (or regenerate) cleaning proposals for a source",
+        "description": "Analyse the latest version of a source and generate cleaning proposals.\n\n- Replaces any existing PENDING proposals (does not touch approved/rejected/applied).\n- Returns the new proposal list.",
+        "operationId": "generate_proposals_sources__source_id__proposals_generate_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/proposals": {
+      "get": {
+        "summary": "List proposals for a source",
+        "description": "Return proposals for a source, optionally filtered by status.",
+        "operationId": "list_proposals_sources__source_id__proposals_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status: pending|approved|rejected|applied",
+              "title": "Status"
+            },
+            "description": "Filter by status: pending|approved|rejected|applied"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proposals/{proposal_id}/approve": {
+      "post": {
+        "summary": "Approve a single cleaning proposal",
+        "description": "Approve one pending proposal.",
+        "operationId": "approve_proposal_proposals__proposal_id__approve_post",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proposals/{proposal_id}/reject": {
+      "post": {
+        "summary": "Reject a single cleaning proposal",
+        "description": "Reject one pending proposal.",
+        "operationId": "reject_proposal_proposals__proposal_id__reject_post",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Proposal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/proposals/approve-all": {
+      "post": {
+        "summary": "Bulk-approve proposals at or above a minimum severity",
+        "description": "Convenience endpoint: approves all PENDING proposals whose severity is\n>= min_severity (critical > warning > info).\n\nThis still requires an explicit POST /sources/{id}/apply to take effect.",
+        "operationId": "approve_all_proposals_sources__source_id__proposals_approve_all_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "min_severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Approve proposals at this severity or more critical: critical|warning|info",
+              "default": "warning",
+              "title": "Min Severity"
+            },
+            "description": "Approve proposals at this severity or more critical: critical|warning|info"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/apply": {
+      "post": {
+        "summary": "Apply approved proposals and create a new version",
+        "description": "Apply all approved proposals, create version N+1, and return a summary.\n\nNothing is applied automatically \u2014 this endpoint must be called explicitly.",
+        "operationId": "apply_source_proposals_sources__source_id__apply_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/versions": {
+      "get": {
+        "summary": "List all versions for a source",
+        "description": "Return all source_versions rows for this source, newest first.",
+        "operationId": "list_versions_sources__source_id__versions_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/versions/{version_no}/profile": {
+      "get": {
+        "summary": "Get the stored quality profile for a specific version",
+        "description": "Return the stored profiler output for a given (source, version).",
+        "operationId": "get_version_profile_sources__source_id__versions__version_no__profile_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "version_no",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version No"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/diff": {
+      "get": {
+        "summary": "Compare quality metrics between two versions",
+        "description": "Return a diff of row counts and profile metrics between two versions.\n\nOutput:\n  - row_counts: {active, excluded, quarantined} for each version\n  - status_delta: change in each status bucket\n  - profile_delta: per-metric difference (from profile JSONs if available)",
+        "operationId": "diff_versions_sources__source_id__diff_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Base version number",
+              "title": "From"
+            },
+            "description": "Base version number"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Target version number",
+              "title": "To"
+            },
+            "description": "Target version number"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/rows": {
+      "get": {
+        "summary": "Get paginated rows for a specific version and status",
+        "description": "Return paginated record/document rows for a given version and optional status.\nIncludes quarantine/exclude reason from row metadata.",
+        "operationId": "get_rows_sources__source_id__rows_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Version number to read",
+              "default": 1,
+              "title": "Version"
+            },
+            "description": "Version number to read"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by: active|excluded|quarantined",
+              "title": "Status"
+            },
+            "description": "Filter by: active|excluded|quarantined"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/index": {
+      "post": {
+        "summary": "Index active content for a source version",
+        "description": "Index active documents and structured records for a source into pgvector.\n- Only content with status='active' is chunked and embedded.\n- Re-indexing creates a new index run (older runs are preserved for comparison).\n- Fails fast if the embedding model dimension does not match the database column.",
+        "operationId": "create_index_run_sources__source_id__index_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{source_id}/index-runs": {
+      "get": {
+        "summary": "List all index runs for a source",
+        "description": "Return all index runs for a source ordered by most recent first.",
+        "operationId": "list_index_runs_sources__source_id__index_runs_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/index-runs/{index_run_id}/chunks": {
+      "get": {
+        "summary": "Preview chunks for an index run",
+        "description": "Return content preview and metadata for chunks of an index run.\nEmbedding vectors are intentionally excluded from responses.",
+        "operationId": "get_index_run_chunks_index_runs__index_run_id__chunks_get",
+        "parameters": [
+          {
+            "name": "index_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index Run Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query": {
+      "post": {
+        "summary": "Execute baseline RAG search and generation",
+        "description": "Search indexed content and generate a grounded, cited answer.\n- If best score < min_score: returns status 'insufficient_evidence' (LLM is not called).\n- If answers lack valid citations: returns status 'unverified'.\n- If citations are valid: returns status 'answered'.",
+        "operationId": "query_endpoint_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queries/{query_id}": {
+      "get": {
+        "summary": "Get query details and retrieval results",
+        "description": "Retrieve details of a past query including retrieved chunks, scores, and citation status.",
+        "operationId": "get_query_details_queries__query_id__get",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Query Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queries": {
+      "get": {
+        "summary": "List recent queries",
+        "description": "List recent search queries.",
+        "operationId": "list_queries_queries_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload": {
+      "post": {
+        "summary": "Upload a file and receive a quality report",
+        "description": "Accept a CSV, XLSX, PDF, DOCX, or image file.\n1. Validate extension and size.\n2. Parse the file.\n3. Profile the parsed data.\n4. Save metadata + report to PostgreSQL.\n5. Persist content to sources/documents/records (Phase 2 backfill).\n6. Return the report as JSON (now includes source_id).",
+        "operationId": "upload_file_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{file_id}": {
+      "get": {
+        "summary": "Get quality report by file ID",
+        "description": "Return the saved quality report for the given file_id.",
+        "operationId": "get_report_reports__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports": {
+      "get": {
+        "summary": "List all uploaded files with a short summary",
+        "description": "Return all uploaded files, each with a one-line summary of the quality report.",
+        "operationId": "list_reports_reports_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_upload_file_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_upload_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IndexRequest": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "chunk_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Size"
+          },
+          "chunk_overlap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Overlap"
+          }
+        },
+        "type": "object",
+        "title": "IndexRequest"
+      },
+      "IngestUrlRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "max_pages": {
+            "type": "integer",
+            "title": "Max Pages",
+            "default": 20
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "IngestUrlRequest"
+      },
+      "QueryRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "source_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Source Ids"
+          },
+          "index_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Run Id"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "min_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "source_ids"
+        ],
+        "title": "QueryRequest"
+      },
+      "RoleUpdateBody": {
+        "properties": {
+          "roles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roles"
+        ],
+        "title": "RoleUpdateBody"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

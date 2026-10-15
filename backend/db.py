@@ -30,14 +30,23 @@ class JSONB(TypeDecorator):
         return dialect.type_descriptor(JSON())
 
 from sqlalchemy.orm import declarative_base, sessionmaker
+from dotenv import load_dotenv
+
+# Load .env from backend directory or project root if present
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path)
+else:
+    load_dotenv()
 
 # ── Connection ──────────────────────────────────────────────────────────────
-# Default connection defaults to ragstudio for backwards compatibility with
-# existing setups. Can be pointed to 'sift' via the DATABASE_URL environment variable.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://postgres:raj1818@localhost:8887/ragstudio"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required but not set. "
+        "Please configure DATABASE_URL in your environment or backend/.env file. "
+        "See backend/.env.example for reference."
+    )
 
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -108,6 +117,9 @@ class Document(Base):
     fetched_at            = Column(DateTime, default=datetime.utcnow)
     metadata_             = Column("metadata", JSONB, default=dict)   # raw fetch metadata
     quality               = Column(JSONB, default=dict)               # output of text_quality checks
+    # Phase 3
+    version_no            = Column(Integer, nullable=False, default=1)
+    status                = Column(Text, nullable=False, default="active")
 
 
 class Record(Base):
@@ -199,6 +211,110 @@ class TransformLog(Base):
     applied_at    = Column(DateTime, default=datetime.utcnow)
 
 
+# ── Phase 4 Table Models ──────────────────────────────────────────────────────
+
+from pgvector.sqlalchemy import Vector as PGVector
+from sqlalchemy.dialects.postgresql import ARRAY
+
+class VectorType(TypeDecorator):
+    """Vector for PostgreSQL pgvector, JSON for SQLite (enables unit testing)."""
+    impl = JSON
+    cache_ok = True
+
+    def __init__(self, dim=384, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dim = dim
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PGVector(self.dim))
+        return dialect.type_descriptor(JSON())
+
+
+class IntArray(TypeDecorator):
+    """INT[] for PostgreSQL, JSON for SQLite (enables unit testing)."""
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(ARRAY(Integer))
+        return dialect.type_descriptor(JSON())
+
+
+class IndexRun(Base):
+    """
+    One row per indexing run for a source.
+    Stores chunk size, overlap, model, status, chunk_count.
+    """
+    __tablename__ = "index_runs"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    source_id      = Column(Integer, ForeignKey("sources.id", ondelete="CASCADE"), nullable=False)
+    source_version = Column(Integer, nullable=False)
+    embed_model    = Column(Text, nullable=False)
+    embed_dim      = Column(Integer, nullable=False)
+    chunk_size     = Column(Integer, nullable=False)
+    chunk_overlap  = Column(Integer, nullable=False)
+    chunk_count    = Column(Integer, default=0)
+    status         = Column(Text, nullable=False)  # 'running' | 'completed' | 'failed'
+    error          = Column(Text, nullable=True)
+    created_at     = Column(DateTime, default=datetime.utcnow)
+    finished_at    = Column(DateTime, nullable=True)
+
+
+class Chunk(Base):
+    """
+    One row per chunk of content from a document or record.
+    """
+    __tablename__ = "chunks"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    index_run_id   = Column(Integer, ForeignKey("index_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id      = Column(Integer, ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id    = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
+    record_id      = Column(Integer, ForeignKey("records.id", ondelete="CASCADE"), nullable=True)
+    chunk_index    = Column(Integer, nullable=False)
+    content        = Column(Text, nullable=False)
+    content_hash   = Column(Text, nullable=False)
+    token_estimate = Column(Integer, nullable=False)
+    embedding      = Column(VectorType(384), nullable=True)
+    metadata_      = Column("metadata", JSONB, default=dict)
+
+
+class QueryRecord(Base):
+    """
+    One row per search question evaluated against the knowledge base.
+    """
+    __tablename__ = "queries"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    question       = Column(Text, nullable=False)
+    source_ids     = Column(IntArray, nullable=False)
+    index_run_ids  = Column(IntArray, nullable=False)
+    top_k          = Column(Integer, nullable=False)
+    min_score      = Column(Float, nullable=False)
+    status         = Column(Text, nullable=False)  # answered | unverified | insufficient_evidence | llm_error
+    answer         = Column(Text, nullable=True)
+    latency_ms     = Column(JSONB, default=dict)
+    created_at     = Column(DateTime, default=datetime.utcnow)
+
+
+class RetrievalResult(Base):
+    """
+    One row per retrieved chunk for a query.
+    """
+    __tablename__ = "retrieval_results"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    query_id       = Column(Integer, ForeignKey("queries.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_id       = Column(Integer, ForeignKey("chunks.id", ondelete="CASCADE"), nullable=False)
+    rank           = Column(Integer, nullable=False)
+    score          = Column(Float, nullable=False)
+    used_in_prompt = Column(Boolean, nullable=False)
+    cited          = Column(Boolean, default=False)
+
+
 # ── Init ──────────────────────────────────────────────────────────────────────
 
 def init_db():
@@ -207,6 +323,7 @@ def init_db():
     Phase 1: creates files, quality_reports via ORM (unchanged).
     Phase 2: applies 002_phase2.sql for sources, documents, records.
     Phase 3: applies 003_phase3.sql for versioning, roles, proposals.
+    Phase 4: applies 004_phase4.sql for index_runs, chunks, queries, retrieval_results.
     Safe to call multiple times — all statements use IF NOT EXISTS.
     """
     with engine.connect() as conn:
@@ -220,14 +337,20 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     # Apply each SQL migration in order (all use IF NOT EXISTS / ON CONFLICT)
-    for fname in ("002_phase2.sql", "003_phase3.sql"):
+    for fname in ("002_phase2.sql", "003_phase3.sql", "004_phase4.sql"):
         migration_path = Path(__file__).parent / "migrations" / fname
         if migration_path.exists():
             sql = migration_path.read_text(encoding="utf-8-sig")
             with engine.connect() as conn:
                 for statement in _split_sql(sql):
                     if statement.strip():
-                        conn.execute(text(statement))
+                        try:
+                            conn.execute(text(statement))
+                        except Exception as e:
+                            if "vector" in statement.lower() and engine.dialect.name != "postgresql":
+                                pass
+                            else:
+                                raise
                 conn.commit()
             print(f"[OK] Migration {fname} applied.")
         else:

@@ -7,6 +7,7 @@ This profiler is READ-ONLY — it never modifies the DataFrame.
 
 import pandas as pd
 from collections import defaultdict
+from profiler.export_utils import is_formula_injection, mask_formula
 
 
 # ── Severity thresholds ───────────────────────────────────────────────────────
@@ -129,6 +130,29 @@ def profile_structured(df: pd.DataFrame) -> dict:
             issues.append({
                 "message":  f"{col}: {bad_count} value(s) cannot be parsed as a date",
                 "severity": "warning",
+            })
+
+    # ── Formula injection detection (CSV / XLSX DDE injection) ────────────────
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col].dtype):
+            continue
+
+        series = df[col].dropna().astype(str)
+        # Skip columns where all values parse as numeric floats
+        try:
+            series.apply(float)
+            continue
+        except (ValueError, TypeError):
+            pass
+
+        formula_cells = [val for val in series if is_formula_injection(val)]
+        if formula_cells:
+            count = len(formula_cells)
+            masked = [mask_formula(v) for v in formula_cells[:3]]
+            issues.append({
+                "message": f"possible formula injection: {count} cells in column {col}",
+                "severity": "warning",
+                "examples": masked,
             })
 
     # ── Build final report ────────────────────────────────────────────────────

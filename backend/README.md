@@ -1,19 +1,28 @@
-# Sift — Phase 1 + Phase 2
+# Sift — Phase 1 to Phase 4 Baseline RAG
 
-A FastAPI backend that ingests files and websites, runs data-quality profiling, persists all content to PostgreSQL, and surfaces heuristic quality/trust signals.
+A FastAPI + PostgreSQL (pgvector) backend that ingests files and websites, runs data-quality profiling, persists content to canonical stores, manages cleaning workflows with versioning and quarantine, and provides a **Baseline RAG system** using plain dense cosine similarity, grounded generation, and strict citation verification.
 
 ---
 
-## What's New in Phase 2
+## What's New in Phase 4 (Baseline RAG)
 
 | Feature | Details |
 |---|---|
-| **Content store** | Parsed text is now persisted: `sources`, `documents`, `records` tables |
-| **Web ingestion** | `POST /ingest/url` crawls a site via sitemap.xml and stores pages |
-| **Text quality checks** | Exact/near duplicates, freshness, short-content, prompt-injection suspects |
-| **New endpoints** | `GET /sources`, `GET /sources/{id}/documents`, `GET /sources/{id}/quality`, `GET /documents/{id}` |
+| **Active Chunking** | Splits active documents (RecursiveCharacterTextSplitter) and serializes structured rows; quarantined/excluded content is NEVER chunked |
+| **Dense Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` (384-dim) normalized embeddings with fail-fast dimension validation |
+| **pgvector Storage** | HNSW cosine similarity index (`chunks_embedding_hnsw`), multi-index-run coexistence |
+| **Cosine Retrieval** | Plain dense search (`1 - cosine_distance`) with top-k ordering and threshold filtering |
+| **Grounded Generation** | `google-genai` SDK with prompt boundaries protecting against untrusted data instructions |
+| **Insufficient Evidence** | If best similarity score < `min_score`, returns `status: "insufficient_evidence"` and **never calls the LLM** |
+| **Citation Verification** | Validates `[chunk_id]` citations against prompt chunks; zero valid citations -> `status: "unverified"`, valid citations -> `status: "answered"` |
+| **New Endpoints** | `POST /sources/{id}/index`, `GET /sources/{id}/index-runs`, `GET /index-runs/{id}/chunks`, `POST /query`, `GET /queries/{id}`, `GET /queries` |
 
-Phase 1 endpoints (`POST /upload`, `GET /reports`, `GET /reports/{id}`) are unchanged. `/upload` now also returns `source_id`.
+---
+
+## What Was Added in Phase 3 & Phase 2
+- **Phase 3**: Column role inference & confirmation, cleaning proposals, apply engine with transactional versioning (`active` / `quarantined` / `excluded` statuses).
+- **Phase 2**: Canonical content store (`sources`, `documents`, `records`), web crawler with SSRF protection, heuristic text quality checks.
+- **Phase 1**: File upload and data quality profiling.
 
 ---
 
@@ -22,7 +31,7 @@ Phase 1 endpoints (`POST /upload`, `GET /reports`, `GET /reports/{id}`) are unch
 | Requirement | Notes |
 |---|---|
 | Python 3.10+ | `python --version` to check |
-| PostgreSQL | Running on `localhost:8887`, db `sift` or `ragstudio`, user `postgres` (or set `DATABASE_URL` env var) |
+| PostgreSQL | PostgreSQL 16 with pgvector extension (configured via `DATABASE_URL` in `.env`) |
 | Tesseract OCR | Required for image uploads only |
 
 > **Note:** The PostgreSQL container is assumed to be already running (`pgvector/pgvector:pg16`).
@@ -232,33 +241,202 @@ curl http://localhost:8000/documents/1
 | `GET` | `/sources/{id}/quality` | Aggregate quality report with issues list |
 | `GET` | `/documents/{id}` | Full document including content |
 
----
+### Phase 4 (new)
 
-## Text Quality Checks (All Heuristics)
-
-All checks are **heuristics** — they may produce false positives/negatives and are labeled as such. Content is **never modified or deleted**.
-
-| Check | Method | Description |
+| Method | Path | Description |
 |---|---|---|
-| Exact duplicate | SHA-256 of normalised text | Identical content under different URLs |
-| Near-duplicate | Word 5-gram Jaccard ≥ 0.85 | Very similar content |
-| Freshness | Age from `published_at` | fresh / aging / stale / unknown |
-| Short content | < 30 words | Possibly truncated or empty |
-| Injection suspect | Regex patterns | "ignore previous instructions", "act as", etc. |
+| `POST` | `/sources/{id}/index` | Chunk active content, embed, and store in pgvector |
+| `GET` | `/sources/{id}/index-runs` | List all index runs for a source (status, chunk count, model) |
+| `GET` | `/index-runs/{id}/chunks` | Preview chunk content and metadata (embeddings omitted) |
+| `POST` | `/query` | Execute dense retrieval + grounded generation with citations |
+| `GET` | `/queries/{id}` | Get query details, answer, and all retrieved chunks with rank/score/citation status |
+| `GET` | `/queries` | List recent search queries |
 
 ---
 
-## Crawler Safety
+## Phase 4 Configuration & Environment Variables
 
-The web crawler enforces mandatory safety constraints:
-- **SSRF protection**: hostname resolved via `socket.getaddrinfo`; loopback, private, link-local, multicast, unspecified and reserved IPs are rejected
-- **Redirect re-validation**: SSRF check performed on every redirect hop
-- **robots.txt**: respected via `urllib.robotparser` (user-agent: SiftBot)
-- **Rate limiting**: 1.5s delay between requests to the same host
-- **Timeouts**: 10s per request
-- **Size limit**: 5 MB per response
-- **Redirect limit**: max 3 redirects
-- **No JavaScript**: static HTML only (JS-rendered pages reported as `likely_js_rendered`)
+Copy `.env.example` to `.env` or set environment variables:
+
+```ini
+# Database connection
+DATABASE_URL=postgresql+psycopg2://user:password@localhost:5432/sift
+
+# Embedding Configuration
+EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
+# (Column dimension is 384; if model dim != 384, indexing fails fast requiring a migration)
+
+# Chunking defaults
+CHUNK_SIZE=800
+CHUNK_OVERLAP=120
+
+# Retrieval defaults
+TOP_K=5
+MIN_SCORE=0.30
+
+# LLM Generation
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+LLM_TIMEOUT=30
+```
+
+---
+
+## Running the Phase 4 Demo
+
+Phase 4 includes an automated end-to-end demo script (`scripts/demo_phase4.py`) that:
+1. Ingests synthetic HR KB documents (DOCX, PDF) and messy employees (CSV).
+2. Cleans the messy CSV (Phase 3 workflow) to produce Version 2 with quarantined rows.
+3. Indexes active content into pgvector.
+4. Directly runs SQL checks verifying that quarantined and excluded rows are never chunked.
+5. Executes the leave policy question (`"How many annual leaves are employees entitled to?"`), returning `status: "answered"` with citation.
+6. Executes the employee department question (`"What is employee E1007's department?"`).
+7. Executes an unsupported question (`"What is the company's Mars colonization budget?"`), returning `status: "insufficient_evidence"` and bypassing the LLM.
+8. Demonstrates coexisting index runs with different chunk sizes.
+9. Verifies query and retrieval result database persistence.
+
+To run the demo:
+
+```bash
+# Option A: Standalone (runs directly with TestClient, no server needed)
+python scripts/demo_phase4.py --standalone
+
+# Option B: Against running server
+uvicorn main:app --reload
+python scripts/demo_phase4.py
+```
+
+---
+
+## Phase 4 Curl Examples
+
+### 1 — Index a Source Version
+
+Index active content of source `1` with custom chunk size and overlap:
+
+```bash
+curl -X POST http://localhost:8000/sources/1/index \
+  -H "Content-Type: application/json" \
+  -d '{"version": 1, "chunk_size": 800, "chunk_overlap": 120}'
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "source_id": 1,
+  "source_version": 1,
+  "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embed_dim": 384,
+  "chunk_size": 800,
+  "chunk_overlap": 120,
+  "chunk_count": 4,
+  "status": "completed",
+  "error": null,
+  "created_at": "2026-10-14 11:00:00",
+  "finished_at": "2026-10-14 11:00:02"
+}
+```
+
+---
+
+### 2 — Query the Knowledge Base (Answer + Citations)
+
+Query indexed sources with dense cosine retrieval:
+
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How many annual leaves are employees entitled to?",
+    "source_ids": [1],
+    "top_k": 5,
+    "min_score": 0.30
+  }'
+```
+
+Response:
+```json
+{
+  "query_id": 1,
+  "status": "answered",
+  "answer": "All full-time employees are entitled to 24 annual leave days per calendar year [1].",
+  "citations": [
+    {
+      "chunk_id": 1,
+      "source_name": "leave_policy_2024.docx",
+      "page_number": null,
+      "url": null,
+      "row_index": null,
+      "score": 0.6268,
+      "snippet": "All full-time employees are entitled to 24 annual leave days per calendar year..."
+    }
+  ],
+  "retrieved": [
+    {
+      "rank": 1,
+      "chunk_id": 1,
+      "score": 0.6268,
+      "used_in_prompt": true,
+      "metadata": {
+        "source_name": "leave_policy_2024.docx",
+        "modality": "text",
+        "freshness": "unknown"
+      }
+    }
+  ],
+  "config": {
+    "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "chunk_size": 800,
+    "chunk_overlap": 120,
+    "top_k": 5,
+    "min_score": 0.30,
+    "index_run_id": 1
+  },
+  "latency_ms": {
+    "embed": 18.2,
+    "retrieve": 18.2,
+    "generate": 350.0,
+    "total": 386.4
+  }
+}
+```
+
+---
+
+### 3 — Retrieve Stored Query History & Citations
+
+Inspect stored query details and chunk scores:
+
+```bash
+curl http://localhost:8000/queries/1
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "question": "How many annual leaves are employees entitled to?",
+  "source_ids": [1],
+  "index_run_ids": [1],
+  "top_k": 5,
+  "min_score": 0.3,
+  "status": "answered",
+  "answer": "All full-time employees are entitled to 24 annual leave days per calendar year [1].",
+  "retrieval_results": [
+    {
+      "rank": 1,
+      "chunk_id": 1,
+      "score": 0.6268,
+      "used_in_prompt": true,
+      "cited": true,
+      "metadata": { "source_name": "leave_policy_2024.docx" },
+      "snippet": "All full-time employees are entitled to 24 annual leave days..."
+    }
+  ]
+}
+```
 
 ---
 
@@ -266,6 +444,8 @@ The web crawler enforces mandatory safety constraints:
 
 - The profiler and quality checks are **read-only** — they never modify uploaded data.
 - `json.dumps(..., default=str)` applied before every JSONB insert.
-- No embeddings, no LLM calls, no vector search, no chunking — Phase 2 only.
-- No single "trust score" — each quality signal is reported independently as a heuristic.
-- Spec ambiguities resolved: non-HTML responses skipped; near-duplicate check scoped per source; robots.txt 404 → allow all.
+- Phase 4 Baseline RAG is deliberately simple (no hybrid/BM25 search, no reranker, no query router) to serve as a pure dense baseline for Phase 5 comparisons.
+- Only active rows in the chosen version are indexed; quarantined and excluded content is strictly excluded.
+- Quarantined and excluded content is never embedded or stored in `chunks`.
+- If best retrieval score < `min_score`, the LLM is never called and status is `insufficient_evidence`.
+

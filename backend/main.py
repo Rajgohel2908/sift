@@ -29,15 +29,22 @@ Phase 3 endpoints (new):
   GET  /sources/{id}/rows                     — Paginated rows
 """
 
+import logging
 import os
+import re
 import shutil
 import tempfile
+import urllib.parse
+import uuid
 from pathlib import Path
 from typing import List
 
+import pandas as pd
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 # ── Local imports ─────────────────────────────────────────────────────────────
 from db import (
@@ -65,6 +72,10 @@ from routers.documents import router as documents_router
 # Phase 3 router
 from routers.cleaning  import router as cleaning_router
 
+# Phase 4 routers
+from routers.indexing  import router as indexing_router
+from routers.rag       import router as rag_router
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -85,9 +96,9 @@ UPLOAD_DIR = Path("uploads")
 
 # ── App init ──────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Sift — Phase 1 + Phase 2 + Phase 3",
-    description="Data ingestion + quality profiling + content store + web crawler + cleaning workflow",
-    version="3.0.0",
+    title="Sift — Phase 1-4 Baseline RAG",
+    description="Data ingestion + quality profiling + content store + web crawler + cleaning workflow + baseline RAG",
+    version="4.0.0",
 )
 
 # Register routers
@@ -95,6 +106,8 @@ app.include_router(ingest_router)
 app.include_router(sources_router)
 app.include_router(documents_router)
 app.include_router(cleaning_router)   # Phase 3
+app.include_router(indexing_router)   # Phase 4
+app.include_router(rag_router)        # Phase 4
 
 
 @app.get("/", include_in_schema=False)
@@ -106,7 +119,19 @@ def root():
 
 @app.on_event("startup")
 def startup():
-    """Create uploads folder and initialise DB tables on first run."""
+    """Verify environment, create uploads folder and initialise DB tables on first run."""
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is required but not set. "
+            "Please configure DATABASE_URL in your environment or backend/.env file."
+        )
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        raise RuntimeError(
+            "GEMINI_API_KEY environment variable is required but not set. "
+            "Please configure GEMINI_API_KEY in your environment or backend/.env file."
+        )
     UPLOAD_DIR.mkdir(exist_ok=True)
     init_db()
     # Phase 3: ensure version 1 exists for any source without one
@@ -146,7 +171,40 @@ def _backfill_source_versions():
         db.close()
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize client-supplied filename:
+      - Unquote URL encodings (e.g. %00)
+      - Extract basename (supporting both / and \\ separators)
+      - Strip control characters (including null bytes)
+      - Preserve clean unicode characters
+      - Bound maximum length to 255 chars preserving extension
+      - Fallback to safe default if empty
+    """
+    if not filename:
+        return "unnamed"
+
+    try:
+        decoded = urllib.parse.unquote(filename)
+    except Exception:
+        decoded = filename
+
+    clean = os.path.basename(decoded.replace("\\", "/"))
+    clean = re.sub(r"[\x00-\x1f\x7f]", "", clean)
+    clean = clean.strip()
+    if not clean or clean in (".", ".."):
+        clean = "unnamed"
+
+    if len(clean) > 255:
+        p = Path(clean)
+        ext = p.suffix[:20]
+        stem = p.stem[:255 - len(ext)]
+        clean = f"{stem}{ext}"
+
+    return clean
+
 
 def detect_format(filename: str) -> str:
     """Return canonical format string based on file extension."""
@@ -307,50 +365,88 @@ async def upload_file(
     5. Persist content to sources/documents/records (Phase 2 backfill).
     6. Return the report as JSON (now includes source_id).
     """
-    # ── 1. Validate extension ─────────────────────────────────────────────────
-    fmt = detect_format(file.filename)
+    # ── 1. Sanitize filename and validate extension ───────────────────────────
+    cleaned_filename = sanitize_filename(file.filename)
+    fmt = detect_format(cleaned_filename)
 
     # ── 2. Read into memory and check size ────────────────────────────────────
     contents = await file.read()
+    if len(contents) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is empty (0 bytes).",
+        )
     if len(contents) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"File exceeds 20 MB limit ({len(contents) / 1e6:.1f} MB uploaded).",
         )
 
-    # ── 3. Write to a temp file so parsers can work with file paths ───────────
-    suffix = Path(file.filename).suffix
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(contents)
-        tmp_path = tmp.name
+    # ── 3. Store on disk under a server-generated name (uuid4 + validated ext) ──
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    raw_ext = Path(cleaned_filename).suffix.lower()
+    validated_ext = raw_ext if raw_ext in ALLOWED_EXTENSIONS else f".{fmt}"
+    if fmt == "image" and validated_ext not in ALLOWED_EXTENSIONS:
+        validated_ext = ".png"
+
+    disk_filename = f"{uuid.uuid4().hex}{validated_ext}"
+    disk_path = UPLOAD_DIR / disk_filename
+    disk_path.write_bytes(contents)
+    tmp_path = str(disk_path)
 
     try:
         # ── 4. Parse ─────────────────────────────────────────────────────────
         if fmt == "csv":
-            df             = parse_csv(tmp_path)
+            df = parse_csv(tmp_path)
+            if df.empty or len(df.columns) == 0 or len(df) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Uploaded file contains no data (zero rows or zero columns).",
+                )
             quality_report = profile_structured(df)
 
         elif fmt == "xlsx":
-            df             = parse_xlsx(tmp_path)
+            df = parse_xlsx(tmp_path)
+            if df.empty or len(df.columns) == 0 or len(df) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Uploaded file contains no data (zero rows or zero columns).",
+                )
             quality_report = profile_structured(df)
 
         elif fmt == "pdf":
-            parsed         = parse_pdf(tmp_path)
+            parsed = parse_pdf(tmp_path)
+            if parsed.get("page_count", 0) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Uploaded PDF contains zero pages.",
+                )
             quality_report = profile_unstructured(parsed, "pdf")
 
         elif fmt == "docx":
-            parsed         = parse_docx(tmp_path)
+            parsed = parse_docx(tmp_path)
             quality_report = profile_unstructured(parsed, "docx")
 
         elif fmt == "image":
-            parsed         = parse_image(tmp_path)
+            parsed = parse_image(tmp_path)
             quality_report = profile_unstructured(parsed, "image")
 
-    finally:
-        os.unlink(tmp_path)
+    except HTTPException:
+        raise
+    except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to parse file: empty or invalid table format.",
+        )
+    except Exception as e:
+        logger.warning("Failed to parse uploaded file %s: %s", cleaned_filename, e)
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to parse uploaded file: corrupt or invalid file format.",
+        )
 
     # ── 5. Save to DB (Phase 1) ───────────────────────────────────────────────
-    file_record = FileRecord(filename=file.filename, format=fmt)
+    file_record = FileRecord(filename=cleaned_filename, format=fmt)
     db.add(file_record)
     db.flush()
 
@@ -363,13 +459,13 @@ async def upload_file(
     source_id = None
     try:
         if fmt in ("csv", "xlsx"):
-            source_id = _persist_structured(db, file_record.id, file.filename, df)
+            source_id = _persist_structured(db, file_record.id, cleaned_filename, df)
         elif fmt == "pdf":
-            source_id = _persist_pdf(db, file_record.id, file.filename, parsed)
+            source_id = _persist_pdf(db, file_record.id, cleaned_filename, parsed)
         elif fmt == "docx":
-            source_id = _persist_docx(db, file_record.id, file.filename, parsed)
+            source_id = _persist_docx(db, file_record.id, cleaned_filename, parsed)
         elif fmt == "image":
-            source_id = _persist_image(db, file_record.id, file.filename, parsed)
+            source_id = _persist_image(db, file_record.id, cleaned_filename, parsed)
     except Exception as e:
         # Phase 2 persistence failure must NOT break the Phase 1 response
         print(f"[WARN] Phase 2 content persistence failed: {e}")

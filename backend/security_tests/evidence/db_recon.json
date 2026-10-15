@@ -1,0 +1,13 @@
+{
+  "user": {
+    "username": "postgres",
+    "is_superuser": true,
+    "create_db": true,
+    "expiry": "None"
+  },
+  "listen_addresses": "*",
+  "extensions": {
+    "plpgsql": "1.0",
+    "vector": "0.8.6"
+  }
+}

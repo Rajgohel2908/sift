@@ -1,0 +1,68 @@
+[
+  {
+    "test_id": "SEC-P1-01",
+    "phase": "Phase 1",
+    "category": "Injection",
+    "description": "CSV Formula (DDE) Injection handling in file upload & profile",
+    "expected": "System should flag spreadsheet formula prefixes in quality report",
+    "actual": "Flagged formula injection warning in quality report: ['possible formula injection: 4 cells in column formula_col']",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": "evidence/sec_p1_01_formula_injection.json"
+  },
+  {
+    "test_id": "SEC-P1-02",
+    "phase": "Phase 1",
+    "category": "Input Validation",
+    "description": "Binary file spoofed with .csv extension",
+    "expected": "400 or 422 validation error",
+    "actual": "Rejected with status 400: {\"detail\":\"Uploaded file contains no data (zero rows or zero",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": "evidence/sec_p1_02_extension_spoofing.json"
+  },
+  {
+    "test_id": "SEC-P1-03",
+    "phase": "Phase 1",
+    "category": "Input Validation",
+    "description": "0-byte empty file upload",
+    "expected": "400 or 422 error rejecting empty file",
+    "actual": "Rejected with status 400",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": "evidence/sec_p1_03_empty_upload.json"
+  },
+  {
+    "test_id": "SEC-P1-05",
+    "phase": "Phase 1",
+    "category": "Path Traversal",
+    "description": "Filename path traversal and Windows device names",
+    "expected": "Basename extracted or safe in-memory handling",
+    "actual": "Handled without filesystem write escape",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  },
+  {
+    "test_id": "QA-P1-01",
+    "phase": "Phase 1",
+    "category": "Robustness",
+    "description": "Profiler handles NaN, inf, huge ints, null bytes, and non-ASCII unicode",
+    "expected": "Profiler returns valid JSON summary without crashing",
+    "actual": "Successfully profiled None rows across None columns",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": "evidence/qa_p1_01_profiler_stability.json"
+  },
+  {
+    "test_id": "QA-P1-02",
+    "phase": "Phase 1",
+    "category": "Functional QA",
+    "description": "GET /reports lists all persisted quality reports",
+    "expected": "Returns 200 and list of reports",
+    "actual": "Returned 200 with 102 reports",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  }
+]

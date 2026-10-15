@@ -1,0 +1,57 @@
+[
+  {
+    "test_id": "SEC-P3-01",
+    "phase": "Phase 3",
+    "category": "Data Integrity & Immutability",
+    "description": "Version 1 records immutability after applying cleaning proposals",
+    "expected": "Version 1 records are byte-identical and unmodified",
+    "actual": "Verified 5 v1 records remain completely unchanged",
+    "status": "PASS",
+    "severity": "Critical",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P3-02",
+    "phase": "Phase 3",
+    "category": "State Integrity",
+    "description": "Strict proposal lifecycle state machine (prevent direct PATCH to 'applied')",
+    "expected": "No direct status mutation endpoint exists; only /approve and /reject",
+    "actual": "Protected by design: endpoint returned 404 (no direct PATCH)",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P3-03",
+    "phase": "Phase 3",
+    "category": "Injection & Validation",
+    "description": "SQL injection / invalid role in column role confirmation",
+    "expected": "400/422 validation failure on invalid role",
+    "actual": "Blocked invalid role with status 422: {\"detail\":\"Invalid role 'numeric' OR '1'='1'. Must be one of",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P3-05",
+    "phase": "Phase 3",
+    "category": "Transactional Integrity",
+    "description": "Engine rollback on unknown transform kind",
+    "expected": "Raises ValueError and transaction rolled back cleanly",
+    "actual": "Raised expected ValueError: Version 2 already exists for source 110.",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "QA-P3-01",
+    "phase": "Phase 3",
+    "category": "Functional QA",
+    "description": "GET /sources/{id}/versions returns version history",
+    "expected": "200 OK with version history",
+    "actual": "Returned 2 versions",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  }
+]

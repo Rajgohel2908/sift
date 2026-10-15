@@ -1,4 +1,4 @@
-﻿"""
+"""
 crawler/sitemap_parser.py — Sitemap.xml and sitemap-index parsing.
 
 Parses standard XML sitemaps and one level of sitemap index files.
@@ -9,8 +9,12 @@ Usage:
     urls = collect_urls(seed_url, client, robots_cache, max_pages=20)
 """
 
-import xml.etree.ElementTree as ET
+import logging
+import defusedxml.ElementTree as ET
+from defusedxml.common import DefusedXmlException
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 # XML namespace used in sitemap.xml files
@@ -86,7 +90,8 @@ def _parse_sitemap(
 
     try:
         root = ET.fromstring(body)
-    except ET.ParseError:
+    except (ET.ParseError, DefusedXmlException) as e:
+        logger.warning("Failed to parse sitemap at %s: %s", sitemap_url, e)
         return
 
     # Detect whether this is a sitemap index or a regular sitemap

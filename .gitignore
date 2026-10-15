@@ -41,6 +41,7 @@ backend/uploads/*
 # Environment variables & secrets
 .env
 .env.*
+!.env.example
 *.env
 
 # IDE & OS

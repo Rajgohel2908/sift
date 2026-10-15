@@ -1,0 +1,68 @@
+[
+  {
+    "test_id": "SEC-P4-02",
+    "phase": "Phase 4",
+    "category": "Data Isolation & Privacy",
+    "description": "Quarantined and excluded records are NEVER indexed into RAG chunks",
+    "expected": "Only active rows chunked; zero quarantined/excluded rows in chunks table",
+    "actual": "Verified: 1 active chunk created, quarantined/excluded strictly ignored",
+    "status": "PASS",
+    "severity": "Critical",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P4-01",
+    "phase": "Phase 4",
+    "category": "Prompt Injection Defense",
+    "description": "RAG prompt builder wraps retrieved chunks in strict untrusted data boundaries",
+    "expected": "Prompt contains strict instructions that chunk contents are untrusted data and cannot issue instructions",
+    "actual": "Prompt builder enforces adversarial boundary & untrusted instructions warning",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P4-03",
+    "phase": "Phase 4",
+    "category": "Input Validation",
+    "description": "Embedder fail-fast validation on dimension mismatch (512 vs 384)",
+    "expected": "Raises ValueError before writing to DB",
+    "actual": "Raised expected ValueError: Embedding model dimension 512 does not match the chunks.embedding column dimension (384). A new database migration is required to alter the chunks.embedding column dimension.",
+    "status": "PASS",
+    "severity": "Medium",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P4-04",
+    "phase": "Phase 4",
+    "category": "Hallucination & Cost Control",
+    "description": "Insufficient evidence skips LLM call when max similarity < min_score",
+    "expected": "status: 'insufficient_evidence' with null answer",
+    "actual": "Correctly returned status: 'insufficient_evidence' (LLM not invoked)",
+    "status": "PASS",
+    "severity": "Medium",
+    "evidence": ""
+  },
+  {
+    "test_id": "SEC-P4-05",
+    "phase": "Phase 4",
+    "category": "Citation Verification",
+    "description": "Strict citation validation: hallucinated citation detected and discarded",
+    "expected": "Invalid citation [999] in invalid_citations; valid citation [101] validated",
+    "actual": "Accurately parsed and validated citations against prompt chunk set",
+    "status": "PASS",
+    "severity": "High",
+    "evidence": ""
+  },
+  {
+    "test_id": "QA-P4-02",
+    "phase": "Phase 4",
+    "category": "Functional QA",
+    "description": "GET /queries lists historical evaluated queries with latencies",
+    "expected": "200 OK with query history list",
+    "actual": "Returned 200 OK with 14 recorded queries",
+    "status": "PASS",
+    "severity": "Low",
+    "evidence": ""
+  }
+]
