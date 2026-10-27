@@ -101,3 +101,30 @@ def test_post_ingest_url_unsupported_scheme():
     response = client.post("/ingest/url", json=payload)
     assert response.status_code == 422
     assert "scheme" in response.json()["detail"].lower()
+
+@pytest.mark.parametrize(
+    "filename,content,mime",
+    [
+        ("spoofed.pdf", b"This is not a valid PDF file structure", "application/pdf"),
+        ("spoofed.docx", b"Not a zip or docx file content", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        ("spoofed.png", b"Not a valid png image", "image/png"),
+        ("zero.csv", b"", "text/csv"),
+        ("corrupt.csv", b"\x00\xff\xfe\x00corrupt binary", "text/csv"),
+    ],
+)
+def test_rejected_uploads_leave_no_files_on_disk(filename, content, mime):
+    """
+    Regression test: rejected uploads (validation/parse/profile failure after save)
+    must delete any temporary file on disk so no new files are left behind.
+    """
+    import main as _main_mod
+    upload_dir = _main_mod.UPLOAD_DIR
+    files_before = set(upload_dir.iterdir()) if upload_dir.exists() else set()
+
+    files = {"file": (filename, io.BytesIO(content), mime)}
+    response = client.post("/upload", files=files)
+    assert response.status_code == 400
+
+    files_after = set(upload_dir.iterdir()) if upload_dir.exists() else set()
+    new_files = files_after - files_before
+    assert len(new_files) == 0, f"Leaked {len(new_files)} files in {upload_dir}: {new_files}"

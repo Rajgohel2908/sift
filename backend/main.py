@@ -92,7 +92,7 @@ ALLOWED_EXTENSIONS = {
     ".webp": "image",
 }
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR: Path = (Path(os.environ["UPLOAD_DIR"]).resolve() if os.environ.get("UPLOAD_DIR") else Path(__file__).resolve().parent / "uploads")
 
 # ── App init ──────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -432,13 +432,16 @@ async def upload_file(
             quality_report = profile_unstructured(parsed, "image")
 
     except HTTPException:
+        disk_path.unlink(missing_ok=True)
         raise
     except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+        disk_path.unlink(missing_ok=True)
         raise HTTPException(
             status_code=400,
             detail="Failed to parse file: empty or invalid table format.",
         )
     except Exception as e:
+        disk_path.unlink(missing_ok=True)
         logger.warning("Failed to parse uploaded file %s: %s", cleaned_filename, e)
         raise HTTPException(
             status_code=400,

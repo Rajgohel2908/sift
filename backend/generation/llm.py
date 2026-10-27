@@ -52,9 +52,11 @@ class GeminiLLMClient(LLMClient):
     def _get_client(self):
         if self._client is None:
             from google import genai
+            timeout_ms = int(self.timeout * 1000) if self.timeout else None
+            http_options = {"timeout": timeout_ms} if timeout_ms else None
             self._client = genai.Client(
                 api_key=self.api_key,
-                http_options={"timeout": self.timeout},
+                http_options=http_options,
             )
         return self._client
 
@@ -107,9 +109,9 @@ class GeminiLLMClient(LLMClient):
             except Exception as e:
                 last_exception = e
                 err_str = str(e).lower()
-                # Check for rate-limit, quota, or 5xx server errors
+                # Check for rate-limit, quota, transient network timeouts, or 5xx server errors
                 is_transient = any(
-                    x in err_str for x in ["429", "rate", "quota", "500", "503", "504", "server", "unavailable", "timeout"]
+                    x in err_str for x in ["429", "rate", "quota", "500", "503", "504", "server", "unavailable", "timeout", "timed out", "connect", "connection", "handshake"]
                 )
                 if attempt < self.max_retries and is_transient:
                     backoff = self.initial_backoff * (2 ** attempt)

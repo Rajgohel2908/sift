@@ -1,5 +1,5 @@
-"""
-build_report.py — Generates the complete, audit-grade SECURITY_TEST_REPORT.md.
+﻿"""
+build_report.py â€” Generates the complete, audit-grade SECURITY_TEST_REPORT.md.
 """
 
 import os
@@ -24,7 +24,7 @@ def generate_report():
             "category": "Hardcoded Secrets",
             "description": "Default connection string contains plaintext credentials in db.py and scripts",
             "expected": "Credentials exclusively sourced from environment variables (.env)",
-            "actual": "Found 'postgres:raj1818@localhost:8887' hardcoded in db.py and demo scripts",
+            "actual": "Found 'postgres:<REDACTED>@localhost:8887' hardcoded in db.py and demo scripts",
             "status": "FAIL",
             "severity": "High",
             "evidence": "evidence/secrets_scan.txt"
@@ -65,12 +65,12 @@ def generate_report():
     med = sum(1 for t in all_tests if t["status"] == "FAIL" and t["severity"] == "Medium")
     low = sum(1 for t in all_tests if t["status"] == "FAIL" and t["severity"] == "Low")
 
-    content = f"""# SIFT PHASES 1–4 APPLICATION SECURITY & QA AUDIT REPORT
+    content = f"""# SIFT PHASES 1â€“4 APPLICATION SECURITY & QA AUDIT REPORT
 
 **Date:** 2026-10-15  
 **Target:** Sift RAG Backend (FastAPI + PostgreSQL 16 pgvector)  
 **Assessor:** Senior Application Security Engineer & QA Lead  
-**Scope:** Phases 1–4 (File Ingestion & Profiling, Canonical Store & Web Ingestion, Cleaning & Versioning, Baseline Dense RAG)  
+**Scope:** Phases 1â€“4 (File Ingestion & Profiling, Canonical Store & Web Ingestion, Cleaning & Versioning, Baseline Dense RAG)  
 **Environment:** Isolated test instance on port 8001 against test database `ragstudio_test`.
 
 ---
@@ -116,7 +116,7 @@ A comprehensive, adversarial Application Security and QA evaluation was conducte
 - **Severity:** High (CVSS 7.4)
 - **Phase:** Static / Configuration
 - **Location:** `backend/db.py`, `backend/scripts/demo_phase3.py`, `backend/scripts/demo_phase4.py`
-- **Description:** Default connection string fallback contains plaintext database credentials (`postgres:raj1818@localhost:8887`). If deployed without an explicit `DATABASE_URL` environment variable, default credentials may be utilized or exposed in version control.
+- **Description:** Default connection string fallback contains plaintext database credentials (`postgres:<REDACTED>@localhost:8887`). If deployed without an explicit `DATABASE_URL` environment variable, default credentials may be utilized or exposed in version control.
 - **Remediation:** Remove plaintext credentials from default strings; require explicit configuration via `.env` or raise a runtime exception if `DATABASE_URL` is unset in non-local environments.
 
 ### [SEC-P1-05] Unsanitized Filename Path Traversal in Upload Persistence
@@ -183,7 +183,7 @@ A comprehensive, adversarial Application Security and QA evaluation was conducte
 ## 5. Blocked / Untestable Items & Accepted Risks
 
 ### Accepted Risks
-1. **Unauthenticated API (Phase 1–4 Scope):** The API endpoints lack authentication/authorization mechanisms as designed for baseline phases. Any unauthenticated caller on network access can create, query, clean, or delete index runs, sources, and records. Productionization requires tenant isolation and authentication.
+1. **Unauthenticated API (Phase 1â€“4 Scope):** The API endpoints lack authentication/authorization mechanisms as designed for baseline phases. Any unauthenticated caller on network access can create, query, clean, or delete index runs, sources, and records. Productionization requires tenant isolation and authentication.
 2. **CPU SentenceTransformer Warmup Latency:** Initial invocation of embedding requires model weight initialization and CPU inference, resulting in 1-2 second query latency on CPU environments.
 """
 

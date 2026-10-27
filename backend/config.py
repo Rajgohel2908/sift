@@ -32,7 +32,7 @@ MIN_SCORE: float = float(os.getenv("MIN_SCORE", "0.30"))
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 # GEMINI_MODEL must come from env, no hardcoded model name in generation code
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "30"))
 
 

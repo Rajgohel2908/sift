@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -25,6 +25,7 @@ venv/
 env/
 ENV/
 .venv/
+.venv*/
 
 # Testing & Coverage
 .pytest_cache/
@@ -33,6 +34,7 @@ htmlcov/
 .tox/
 
 # Local databases & uploads
+/uploads/
 backend/uploads/*
 !backend/uploads/.gitkeep
 *.db

@@ -448,4 +448,3 @@ Response:
 - Only active rows in the chosen version are indexed; quarantined and excluded content is strictly excluded.
 - Quarantined and excluded content is never embedded or stored in `chunks`.
 - If best retrieval score < `min_score`, the LLM is never called and status is `insufficient_evidence`.
-

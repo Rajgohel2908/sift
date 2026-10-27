@@ -1,9 +1,9 @@
-# SIFT PHASES 1–4 APPLICATION SECURITY & QA AUDIT REPORT
+﻿# SIFT PHASES 1â€“4 APPLICATION SECURITY & QA AUDIT REPORT
 
 **Date:** 2026-10-15  
 **Target:** Sift RAG Backend (FastAPI + PostgreSQL 16 pgvector)  
 **Assessor:** Senior Application Security Engineer & QA Lead  
-**Scope:** Phases 1–4 (File Ingestion & Profiling, Canonical Store & Web Ingestion, Cleaning & Versioning, Baseline Dense RAG)  
+**Scope:** Phases 1â€“4 (File Ingestion & Profiling, Canonical Store & Web Ingestion, Cleaning & Versioning, Baseline Dense RAG)  
 **Environment:** Isolated test instance on port 8001 against test database `ragstudio_test`.
 
 ---
@@ -68,7 +68,7 @@ A comprehensive, adversarial Application Security and QA evaluation was conducte
 | `SEC-P4-04` | Phase 4 | Hallucination & Cost Control | Insufficient evidence skips LLM call when max similarity < min_score | status: 'insufficient_evidence' with null answer | Correctly returned status: 'insufficient_evidence' (LLM not invoked) | **PASS** | Medium | Console |
 | `SEC-P4-05` | Phase 4 | Citation Verification | Strict citation validation: hallucinated citation detected and discarded | Invalid citation [999] in invalid_citations; valid citation [101] validated | Accurately parsed and validated citations against prompt chunk set | **PASS** | High | Console |
 | `QA-P4-02` | Phase 4 | Functional QA | GET /queries lists historical evaluated queries with latencies | 200 OK with query history list | Returned 200 OK with 14 recorded queries | **PASS** | Low | Console |
-| `SEC-STAT-01` | Static / Config | Hardcoded Secrets | Default connection string contains plaintext credentials in db.py and scripts | Credentials exclusively sourced from environment variables (.env) | Found 'postgres:raj1818@localhost:8887' hardcoded in db.py and demo scripts | <span style='color:red;'>**FAIL**</span> | High | `evidence/secrets_scan.txt` |
+| `SEC-STAT-01` | Static / Config | Hardcoded Secrets | Default connection string contains plaintext credentials in db.py and scripts | Credentials exclusively sourced from environment variables (.env) | Found 'postgres:<REDACTED>@localhost:8887' hardcoded in db.py and demo scripts | <span style='color:red;'>**FAIL**</span> | High | `evidence/secrets_scan.txt` |
 | `SEC-STAT-02` | Static / Code Quality | Cryptography | Use of MD5 hash in indexing/embedder.py (Bandit B324) | Use SHA-256 or specify hashlib.md5(..., usedforsecurity=False) | hashlib.md5(text.encode('utf-8')) called without usedforsecurity=False | <span style='color:red;'>**FAIL**</span> | Low | `evidence/bandit_report.json` |
 | `SEC-DEP-01` | Dependencies | Vulnerable Packages | Dependencies contain known vulnerabilities reported by pip-audit | Dependencies pinned to patched versions without known CVEs | Vulnerabilities found in starlette 0.38.6, python-multipart 0.0.9, requests 2.32.5 | <span style='color:red;'>**FAIL**</span> | Medium | `evidence/pip_audit_report.json` |
 
@@ -80,7 +80,7 @@ A comprehensive, adversarial Application Security and QA evaluation was conducte
 - **Severity:** High (CVSS 7.4)
 - **Phase:** Static / Configuration
 - **Location:** `backend/db.py`, `backend/scripts/demo_phase3.py`, `backend/scripts/demo_phase4.py`
-- **Description:** Default connection string fallback contains plaintext database credentials (`postgres:raj1818@localhost:8887`). If deployed without an explicit `DATABASE_URL` environment variable, default credentials may be utilized or exposed in version control.
+- **Description:** Default connection string fallback contains plaintext database credentials (`postgres:<REDACTED>@localhost:8887`). If deployed without an explicit `DATABASE_URL` environment variable, default credentials may be utilized or exposed in version control.
 - **Remediation:** Remove plaintext credentials from default strings; require explicit configuration via `.env` or raise a runtime exception if `DATABASE_URL` is unset in non-local environments.
 
 ### [SEC-P1-05] Unsanitized Filename Path Traversal in Upload Persistence
@@ -147,5 +147,5 @@ A comprehensive, adversarial Application Security and QA evaluation was conducte
 ## 5. Blocked / Untestable Items & Accepted Risks
 
 ### Accepted Risks
-1. **Unauthenticated API (Phase 1–4 Scope):** The API endpoints lack authentication/authorization mechanisms as designed for baseline phases. Any unauthenticated caller on network access can create, query, clean, or delete index runs, sources, and records. Productionization requires tenant isolation and authentication.
+1. **Unauthenticated API (Phase 1â€“4 Scope):** The API endpoints lack authentication/authorization mechanisms as designed for baseline phases. Any unauthenticated caller on network access can create, query, clean, or delete index runs, sources, and records. Productionization requires tenant isolation and authentication.
 2. **CPU SentenceTransformer Warmup Latency:** Initial invocation of embedding requires model weight initialization and CPU inference, resulting in 1-2 second query latency on CPU environments.

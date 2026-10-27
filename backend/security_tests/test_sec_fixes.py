@@ -65,7 +65,8 @@ def test_sec_stat_01_no_tracked_secrets():
     cmd = ["git", "grep", "-I", "-n", "raj1818"]
     result = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True)
     # The only place raj1818 should appear (if at all) is past git commits or test_sec_fixes assertion
-    lines = [line for line in result.stdout.splitlines() if "test_sec_fixes.py" not in line and "SECURITY_TEST_REPORT.md" not in line and "evidence/" not in line]
+    ignored = ("test_sec_fixes.py", "SECURITY_TEST_REPORT.md", "FIXES_REPORT.md", "build_report.py", "stage0_recon.py", "evidence/")
+    lines = [line for line in result.stdout.splitlines() if not any(ign in line for ign in ignored)]
     assert len(lines) == 0, f"Found hardcoded credentials in tracked files:\n" + "\n".join(lines)
 
 

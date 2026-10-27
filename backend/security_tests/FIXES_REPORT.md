@@ -1,4 +1,4 @@
-# Security Fixes Remediation Report
+﻿# Security Fixes Remediation Report
 
 **Date:** 2026-10-15  
 **Project:** Sift Backend (FastAPI + PostgreSQL pgvector RAG Pipeline)  
@@ -20,9 +20,9 @@ All six security audit findings identified in `SECURITY_TEST_REPORT.md` were rem
 ## Detailed Remediation by Finding
 
 ### 1. SEC-STAT-01: Hardcoded Database Credentials & Startup Fail-Fast
-- **Finding Description:** `db.py` contained hardcoded fallback database credentials (`postgresql+psycopg2://postgres:raj1818@localhost:8887/ragstudio`), exposing plaintext passwords. Additionally, test scripts and README documentation embedded these credentials, and the application did not fail fast if critical environment variables were missing.
+- **Finding Description:** `db.py` contained hardcoded fallback database credentials (`postgresql+psycopg2://postgres:<REDACTED>@localhost:8887/ragstudio), exposing plaintext passwords. Additionally, test scripts and README documentation embedded these credentials, and the application did not fail fast if critical environment variables were missing.
 - **Files Changed:**
-  - `backend/db.py`: Removed hardcoded `raj1818` fallback string; loaded `.env` via `python-dotenv`; enforced immediate `RuntimeError("DATABASE_URL environment variable is required but not set.")` if missing.
+  - `backend/db.py`: Removed hardcoded `<REDACTED>` fallback string; loaded `.env` via `python-dotenv`; enforced immediate `RuntimeError("DATABASE_URL environment variable is required but not set.")` if missing.
   - `backend/main.py`: Added explicit fail-fast startup checks requiring non-empty `DATABASE_URL` and `GEMINI_API_KEY`.
   - `backend/README.md`: Replaced all hardcoded credentials with generic documentation placeholders (`user:password@localhost:5432/sift`).
   - `backend/.env.example`: Added configuration template with dummy placeholders.
